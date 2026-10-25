@@ -2,7 +2,7 @@
 
 Windwise is a React and Python pilot for the UK utility team making day-ahead power buying decisions. It focuses on national wind generation using only Elexon WINDFOR forecasts and FUELHH `WIND` actuals.
 
-**Two-part demo:** A revised 3:15 video is prepared locally. Its unlisted YouTube upload is pending confirmation of YouTube Studio's upload acknowledgement; do not submit the previous video link.
+**Two-part demo:** A revised 3:15 video is prepared locally but is not published. No YouTube URL is available; the previous video link refers to an earlier version and should not be submitted.
 
 ## What the pilot answers
 
