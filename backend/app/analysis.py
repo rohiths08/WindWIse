@@ -63,11 +63,15 @@ def build_analysis(
     actual_records: list[dict[str, Any]],
     forecast_records: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    # The requested window is the day the trading decision is made. Each
+    # decision is for the next local calendar day's delivery intervals.
+    delivery_start = start + timedelta(days=1)
+    delivery_end = end + timedelta(days=1)
     relevant_forecast_starts = [
         parsed
         for record in forecast_records
         if (parsed := parse_timestamp(record.get("startTime"))) is not None
-        and start <= parsed.astimezone(LONDON).date() <= end
+        and delivery_start <= parsed.astimezone(LONDON).date() <= delivery_end
     ]
     # The January WINDFOR data returned by Elexon has hourly start times. Keep
     # half-hour support if that dataset provides it; never synthesize forecasts.
@@ -81,7 +85,7 @@ def build_analysis(
             continue
         target = parse_timestamp(record.get("startTime"))
         generation = _generation(record)
-        if not target or generation is None or not start <= target.astimezone(LONDON).date() <= end:
+        if not target or generation is None or not delivery_start <= target.astimezone(LONDON).date() <= delivery_end:
             continue
         current = actual_by_start.get(target)
         published = parse_timestamp(record.get("publishTime")) or datetime.min.replace(tzinfo=UTC)
@@ -98,7 +102,7 @@ def build_analysis(
         if not target or not published or generation is None:
             continue
         target_day = target.astimezone(LONDON).date()
-        if not start <= target_day <= end:
+        if not delivery_start <= target_day <= delivery_end:
             continue
         cutoff_utc = datetime.combine(
             target_day - timedelta(days=1), cutoff, tzinfo=LONDON
@@ -115,11 +119,12 @@ def build_analysis(
 
     interval_rows: list[dict[str, Any]] = []
     daily_rows: list[dict[str, Any]] = []
-    current_day = start
-    while current_day <= end:
-        day_start = datetime.combine(current_day, clock_time.min, tzinfo=LONDON).astimezone(UTC)
+    decision_day = start
+    while decision_day <= end:
+        delivery_day = decision_day + timedelta(days=1)
+        day_start = datetime.combine(delivery_day, clock_time.min, tzinfo=LONDON).astimezone(UTC)
         next_day_start = datetime.combine(
-            current_day + timedelta(days=1), clock_time.min, tzinfo=LONDON
+            delivery_day + timedelta(days=1), clock_time.min, tzinfo=LONDON
         ).astimezone(UTC)
         day_rows: list[dict[str, Any]] = []
         target = day_start
@@ -160,7 +165,7 @@ def build_analysis(
             target += timedelta(minutes=comparison_resolution_minutes)
 
         daily_metrics = _aggregate(
-            day_rows, expected_intervals(current_day, comparison_resolution_minutes)
+            day_rows, expected_intervals(delivery_day, comparison_resolution_minutes)
         )
         used_publications = [
             parse_timestamp(row["forecastPublishTime"])
@@ -169,9 +174,10 @@ def build_analysis(
         ]
         daily_rows.append(
             {
-                "deliveryDate": current_day.isoformat(),
+                "decisionDate": decision_day.isoformat(),
+                "deliveryDate": delivery_day.isoformat(),
                 "decisionCutoff": datetime.combine(
-                    current_day - timedelta(days=1), cutoff, tzinfo=LONDON
+                    decision_day, cutoff, tzinfo=LONDON
                 ).isoformat(),
                 "latestForecastPublishTime": max(used_publications).isoformat().replace("+00:00", "Z")
                 if used_publications
@@ -182,15 +188,18 @@ def build_analysis(
             }
         )
         interval_rows.extend(day_rows)
-        current_day += timedelta(days=1)
+        decision_day += timedelta(days=1)
 
     total_expected = sum(
         expected_intervals(day, comparison_resolution_minutes)
-        for day in _date_range(start, end)
+        for day in _date_range(delivery_start, delivery_end)
     )
     return {
         "startDate": start.isoformat(),
         "endDate": end.isoformat(),
+        "windowBasis": "decision_date",
+        "deliveryStartDate": delivery_start.isoformat(),
+        "deliveryEndDate": delivery_end.isoformat(),
         "decisionCutoffLocalTime": cutoff.strftime("%H:%M"),
         "timezone": "Europe/London",
         "units": "MW",

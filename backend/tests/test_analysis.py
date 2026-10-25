@@ -21,7 +21,7 @@ class AsOfAnalysisTests(unittest.TestCase):
             {"startTime": target, "publishTime": "2026-01-11T09:30:00Z", "generation": 95},
             {"startTime": target, "publishTime": "2026-01-11T10:00:00Z", "generation": 1000},
         ]
-        result = build_analysis(date(2026, 1, 12), date(2026, 1, 12), time(9, 50), actuals, forecasts)
+        result = build_analysis(date(2026, 1, 11), date(2026, 1, 11), time(9, 50), actuals, forecasts)
         row = next(row for row in result["intervals"] if row["startTime"] == target)
         self.assertEqual(row["actualMW"], 100)
         self.assertEqual(row["forecastMW"], 95)
@@ -29,11 +29,14 @@ class AsOfAnalysisTests(unittest.TestCase):
         self.assertEqual(row["errorMW"], -5)
         self.assertEqual(result["metrics"]["matchedIntervals"], 1)
         self.assertEqual(result["comparisonResolutionMinutes"], 60)
+        self.assertEqual(result["daily"][0]["decisionDate"], "2026-01-11")
+        self.assertEqual(result["daily"][0]["deliveryDate"], "2026-01-12")
+        self.assertEqual(result["daily"][0]["decisionCutoff"], "2026-01-11T09:50:00+00:00")
 
     def test_hourly_outturn_uses_mean_of_two_half_hour_actuals(self):
         result = build_analysis(
-            date(2026, 1, 12),
-            date(2026, 1, 12),
+            date(2026, 1, 11),
+            date(2026, 1, 11),
             time(9, 50),
             [
                 {"fuelType": "WIND", "startTime": "2026-01-12T10:00:00Z", "publishTime": "2026-01-12T11:00:00Z", "generation": 100},
@@ -45,6 +48,24 @@ class AsOfAnalysisTests(unittest.TestCase):
         self.assertEqual(row["actualMW"], 110)
         self.assertEqual(row["errorMW"], 0)
         self.assertEqual(result["daily"][0]["matchedIntervals"], 1)
+
+    def test_last_january_decision_covers_february_first_delivery(self):
+        target = "2026-02-01T00:00:00Z"
+        result = build_analysis(
+            date(2026, 1, 31),
+            date(2026, 1, 31),
+            time(9, 50),
+            [
+                {"fuelType": "WIND", "startTime": target, "publishTime": "2026-02-01T01:00:00Z", "generation": 100},
+                {"fuelType": "WIND", "startTime": "2026-02-01T00:30:00Z", "publishTime": "2026-02-01T01:00:00Z", "generation": 120},
+            ],
+            [{"startTime": target, "publishTime": "2026-01-31T09:45:00Z", "generation": 110}],
+        )
+        self.assertEqual(result["daily"][0]["decisionDate"], "2026-01-31")
+        self.assertEqual(result["daily"][0]["deliveryDate"], "2026-02-01")
+        self.assertEqual(result["intervals"][0]["localStartTime"], "2026-02-01T00:00:00+00:00")
+        self.assertEqual(result["intervals"][0]["actualMW"], 110)
+        self.assertEqual(result["intervals"][0]["forecastMW"], 110)
 
     def test_missing_values_are_not_counted_as_zero(self):
         result = build_analysis(date(2026, 1, 1), date(2026, 1, 1), time(9, 50), [], [])

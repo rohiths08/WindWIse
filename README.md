@@ -1,47 +1,47 @@
-# Windwise · UK Wind Forecast Monitor
+# Windwise · UK Day-Ahead Wind Forecast Monitor
 
-Windwise is a React and Python pilot dashboard for reviewing Elexon national wind forecasts against actual generation. It focuses on the forecast vintage available at the previous-day decision cutoff for each January 2026 delivery interval.
+Windwise is a React and Python pilot for the UK utility team making day-ahead power buying decisions. It focuses on national wind generation using only Elexon WINDFOR forecasts and FUELHH `WIND` actuals.
 
-**Two-part demo video (unlisted, 5:07):** [Watch the product and technical walkthrough](https://youtu.be/Cr0m-9wPOUU).
+**Two-part demo:** A revised 3:15 video is prepared locally. Its unlisted YouTube upload is pending confirmation of YouTube Studio's upload acknowledgement; do not submit the previous video link.
 
-## What it answers
+## What the pilot answers
 
-- What wind generation forecast was available for each target hour when the day-ahead decision was due?
-- How closely did that forecast match Elexon's later wind outturn?
-- How complete is the forecast/actual comparison for each delivery day?
+- What national wind forecast was available by the selected cutoff for each buying decision?
+- How did that forecast compare with the later Elexon wind outturn?
+- How complete is each comparison, and where were forecast errors larger?
 
-The app uses Elexon's FUELHH actual generation records filtered to `fuelType=WIND` and WINDFOR forecast records. It selects a forecast by `startTime`, keeping the record with the greatest `publishTime` at or before the decision cutoff for that delivery interval. Forecasts published after the cutoff are excluded. January WINDFOR records have hourly target times while FUELHH outturn is half-hourly, so each comparison uses the average of the two actual half-hour readings for that hour. The app does not synthesize half-hour forecasts. Missing hourly actuals stay missing and are not treated as zero.
+The brief asks for **decisions made in January 2026**. Windwise therefore evaluates decision dates from **1–31 January 2026**, with each day’s forecast checked against the **next day’s delivery** (2 January–1 February). The decision date and delivery date are shown separately in the dashboard and API.
 
-The default cutoff is 09:50 UK local time on D−1, based on Nord Pool's published N2EX GB day-ahead auction guidance. The market was not specified in the brief, so this is an explicit working assumption; change the time control in the dashboard to inspect another decision point. January is on GMT, but the application uses the `Europe/London` time zone so delivery-day and clock changes are handled correctly.
+For each delivery hour, Windwise selects the WINDFOR record with the greatest `publishTime` at or before the configured decision cutoff. Records published after the cutoff are excluded, even if they are now visible in Elexon’s historical archive. The default cutoff is **09:50 Europe/London on the decision date**, based on Nord Pool’s published N2EX GB day-ahead auction guidance. The brief did not identify a specific auction or trading desk, so this is a documented, editable assumption rather than a universal UK market deadline.
 
-This is a wind-side forecast monitor, not a full procurement recommendation. The scoped datasets do not contain consumer demand, the utility's contracted generation, interconnector position, or portfolio exposure, so the app does not invent a residual purchase quantity or trading instruction.
+January WINDFOR target points are hourly in the retrieved data; FUELHH actuals are half-hourly. Each forecast hour is compared with the mean of its two half-hour actuals. Missing pairs remain missing and do not count as zero or enter the error metrics. The app displays coverage beside the scores.
 
-## Measures
+This is a wind forecast monitor, not a procurement recommendation. The scoped datasets do not include consumer demand, the utility’s contracted generation, plant availability, interconnector position, or portfolio exposure. The app does not invent a residual purchase quantity or trade instruction.
 
-- **MAE (MW):** mean absolute forecast error across matched hourly points.
+## Accuracy measures
+
+- **MAE (MW):** average absolute difference between forecast and actual.
 - **RMSE (MW):** square root of mean squared error; larger misses count more.
-- **WAPE (%):** sum of absolute errors divided by the sum of absolute actual wind generation across matched hourly points.
-- **Coverage (%):** matched forecast-and-actual hourly points divided by expected hours in the selected period.
-- **Bias (MW):** average forecast minus actual; positive means the forecast was high. Returned by the API for analysis.
+- **WAPE (%):** total absolute error divided by total absolute actual wind generation.
+- **Bias (MW):** average forecast minus actual; positive means the forecast ran high.
+- **Coverage (%):** matched forecast-and-actual hourly points divided by expected hours.
 
-No score is shown for an interval without both a forecast available by the cutoff and an actual. Coverage is displayed beside error metrics for that reason.
-
-The live API snapshot retrieved on **25 October 2026** contains 744 of 744 matched hourly points (100% coverage): MAE 2,122.8 MW, RMSE 2,616.7 MW, WAPE 18.33%, and signed bias +1,840.3 MW. Elexon may revise historical records, so these values describe that retrieval and can change on refresh.
+The live Elexon retrieval on **25 October 2026** returned 744 matched hourly points out of 744 expected (100% coverage): **MAE 2,013.0 MW, RMSE 2,505.9 MW, WAPE 17.84%, and bias +1,729.9 MW**. These numbers describe that retrieval; Elexon may revise historical records, and a refresh may change the results.
 
 ## Data and assumptions
 
-- **Actuals:** [Elexon FUELHH stream](https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/FUELHH/stream), filtered to WIND and the January 2026 settlement dates.
-- **Forecasts:** [Elexon WINDFOR stream](https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/WINDFOR/stream), queried by publication time to recover historical vintages.
-- **API base:** `https://data.elexon.co.uk/bmrs/api/v1`. Elexon's developer portal says its public APIs require no API key. The server fetches data on request and caches each response in memory for ten minutes.
-- **Delivery month:** 1–31 January 2026, interpreted as delivery dates in `Europe/London`. FUELHH supplies 48 half-hour values per winter day; WINDFOR target points are hourly in the retrieved January data. Metrics compare hourly wind forecasts with hourly actual means (24 points per day).
-- **Decision cutoff:** 09:50 Europe/London on the preceding day by default, following Nord Pool's published N2EX guidance. The specific market/cutoff is configurable. Forecast inclusion is based strictly on `publishTime <= cutoff`.
-- **Forecast lookback:** the API request begins seven days before the first delivery date to include the forward forecast horizon; the selection rule still uses each delivery day's cutoff.
-- **Outturn vintage:** the latest FUELHH values currently returned by Elexon are used for evaluation. They are actuals, not values assumed to have been known at the day-ahead cutoff.
-- **Scope limit:** no demand, prices, thermal availability, contracts, or other fuel types are used to produce procurement advice.
+- **Actual generation:** [Elexon FUELHH stream](https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/FUELHH/stream), filtered to `fuelType=WIND`, queried for settlement dates 2 January–1 February 2026.
+- **Forecast generation:** [Elexon WINDFOR stream](https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/WINDFOR/stream), queried by publication time to recover forecast vintages available by each January decision cutoff.
+- **API base:** `https://data.elexon.co.uk/bmrs/api/v1`. The public Elexon API does not require an API key. Responses are cached in memory for ten minutes.
+- **Decision period:** 1–31 January 2026, interpreted as decision dates in `Europe/London`; delivery targets run 2 January–1 February.
+- **Decision cutoff:** 09:50 Europe/London on the decision date, following the published N2EX guidance. The cutoff is configurable in the dashboard.
+- **Forecast lookback:** seven days before the first delivery date to capture the forward forecast horizon. The selection rule still applies each target hour’s own decision cutoff.
+- **Outturn vintage:** the latest FUELHH values currently returned by Elexon are used to evaluate forecasts. They are not treated as data known at the buying decision.
+- **Scope:** no demand, prices, thermal availability, contracts, or other fuel types are used to produce procurement advice.
 
-Elexon's developer portal documents the public API, historical publication-time retrieval, and the applicable data licence terms: [Insights Developer Portal](https://developer.data.elexon.co.uk/). Elexon data is attributed to Elexon Insights in the app and must remain subject to its data licence terms.
+Elexon’s [Insights Developer Portal](https://developer.data.elexon.co.uk/) documents the public API and data licence terms. Elexon data is attributed in the app and remains subject to those terms.
 
-## Run with Docker
+## Start with Docker
 
 Requirements: Docker Engine with the Compose plugin.
 
@@ -49,11 +49,11 @@ Requirements: Docker Engine with the Compose plugin.
 docker compose up --build
 ```
 
-Open <http://localhost:5173>. The API is also available at <http://localhost:8000/api/health> and the interactive API reference at <http://localhost:8000/docs>.
+Open <http://localhost:5173>. The API health endpoint is <http://localhost:8000/api/health> and the interactive API reference is <http://localhost:8000/docs>.
 
 Stop the services with `Ctrl+C`; run `docker compose down` to remove the containers.
 
-## Run without Docker
+## Start without Docker
 
 Backend, from `backend/`:
 
@@ -73,9 +73,9 @@ npm run dev
 
 Vite proxies `/api` to `http://localhost:8000` by default. Set `VITE_API_PROXY_TARGET` to change the proxy target.
 
-## Tests and build
+## Checks
 
-The small unit suite exercises the cutoff selection rule, WIND-only actual filtering, half-hour-to-hour actual averaging, missing-data handling, and hourly/half-hour interval counts:
+The backend unit suite covers the as-of cutoff rule, WIND-only actual filtering, averaging half-hour outturn into an hourly actual, missing-data handling, the 24-hour daily interval count, and the January 31 decision mapping to February 1 delivery.
 
 ```bash
 cd backend
@@ -84,36 +84,40 @@ python -m unittest discover -s tests -v
 
 Build the frontend with `cd frontend && npm install && npm run build`.
 
-## Deploy
+## Repository and hosting
 
-The repository includes a Vercel FastAPI entry point and a build command that copies the Vite output into `public/` for static delivery. Vercel serves the React page and routes the API through FastAPI. From the repository root, run `vercel` and follow the prompts. Hosting was skipped at the user’s request. No deployment URL was created. The Vercel CLI was not authenticated, and the anonymous deployment attempt failed before creating a site. To deploy later, sign in to Vercel and run `vercel --prod` from the repository root.
+Public repository: [github.com/rohiths08/WindWIse](https://github.com/rohiths08/WindWIse).
+
+**Hosted app:** no deployment URL is available. Hosting was skipped at the user’s request, so the Vercel/Heroku deployment requirement is currently outstanding. The repository retains Vercel configuration as a starting point for a later deployment.
+
+The repository name `WindWIse` was selected explicitly by the user. It no longer uses the anonymous random-string naming requested in the original brief.
 
 ## Directory guide
 
 ```text
-app.py                       Vercel FastAPI entry point
+app.py                        Vercel FastAPI entry point
 backend/
-  app/elexon.py               Elexon HTTP client and short-lived response cache
-  app/analysis.py             As-of forecast selection, time-zone handling, and metrics
-  app/main.py                 FastAPI endpoints and January range validation
-  tests/test_analysis.py      Unit checks for the forecast cutoff and accuracy behavior
-  Dockerfile                  Python API container
-  requirements.txt            Python dependencies
+  app/elexon.py                Elexon HTTP client and ten-minute response cache
+  app/analysis.py              decision cutoff selection, time zones, and accuracy metrics
+  app/main.py                  FastAPI endpoints and January decision-date validation
+  tests/test_analysis.py       unit tests for forecast selection and metric behavior
+  Dockerfile                   Python API container
+  requirements.txt             Python dependencies
 frontend/
-  src/main.jsx                React dashboard, charts, controls, and interval table
-  src/styles.css              Responsive dashboard styling
-  index.html                  Browser entry document and metadata
-  vite.config.js              Development server and API proxy
-  Dockerfile                  React/Vite container
-docker-compose.yml            Local two-service Docker setup
-vercel.json                   Vercel FastAPI runtime configuration
-package.json                  Root deployment build command
-pyproject.toml                Hosted Python project metadata
-requirements.txt              Root Python dependency entry for Vercel
-uv.lock                       Resolved hosted Python dependency versions
-DEMO_SCRIPT.md                Two-part, under-10-minute video walkthrough
+  src/main.jsx                 React dashboard, charts, cutoff control, and interval table
+  src/styles.css               responsive dashboard styling
+  index.html                   browser entry page and metadata
+  vite.config.js               development server and API proxy
+  Dockerfile                   React/Vite container
+docker-compose.yml             local frontend and backend services
+vercel.json                    Vercel routing/runtime configuration
+package.json                   root deployment build command
+pyproject.toml                 hosted Python project metadata
+requirements.txt               root Python dependencies for hosting
+uv.lock                        resolved hosted Python dependency versions
+DEMO_SCRIPT.md                 two-part video script and timing
 ```
 
 ## AI assistance
 
-OpenAI Codex was used to research the Elexon API, implement the application, tests and documentation, and prepare the demo script. The video narration uses a generic English (UK) synthetic voice generated with eSpeak NG. The as-of forecast selection and metric definitions are documented above and covered by unit checks.
+OpenAI Codex was used to research the Elexon API and market context, implement the application, analysis, tests and documentation, and prepare the demo. The submitted video uses a synthetic English (UK) voice generated with Microsoft Edge TTS; the narration is computer-generated, not a human recording.

@@ -1,51 +1,65 @@
 # Windwise · two-part demo script
 
-**Runtime:** 5:07 as shown on YouTube (307.8 seconds in the encoded file), under the 10-minute limit. Part 1: 2:36; Part 2: 2:32.
+**Runtime:** 3 minutes 15 seconds. Part 1 runs about 1:41; Part 2 about 1:35. Both are under five minutes, and the full video is under ten minutes.
 
-**Data snapshot:** Elexon API retrieval on 25 October 2026. Historical values can change upstream.
+**Data snapshot:** Elexon retrieval on 25 October 2026. Historical values may change upstream.
 
-**Video format:** narrated slide walkthrough with a captured view of the running dashboard. AI assistance and synthetic voice are disclosed in the repository README.
+**Narration:** synthetic English (UK) neural voice. OpenAI Codex helped prepare the product and demo; this is disclosed in the README and video description.
 
-## Part 1 · Client overview (0:00–2:36)
+## Part 1 · Client overview (0:00–1:41)
 
-### Slide 1 · Product and user
+### 0:00–0:38 · Product and measured outcome
 
-Part one, the client overview. Windwise is a pilot for the UK utility team that buys power day ahead. It shows the national wind forecast available at the decision point and measures it against Elexon outturn for January 2026. The app answers what the wind forecast said and how it performed. It does not claim to calculate the utility’s residual procurement volume.
+**On screen:** Dashboard overview with the five KPI cards and monthly error chart.
 
-### Slide 2 · Decision cutoff
+**Narration:** Windwise is a pilot monitor for a UK utility's day-ahead buying team. It shows the national wind forecast available at the decision cutoff and measures it against Elexon outturn. In the 25 October 2026 retrieval, all 744 expected hours are matched. MAE is 2,013 MW, RMSE is 2,505.9 MW, WAPE is 17.84%, and bias is +1,729.9 MW. The forecast ran high on average.
 
-The decision clock matters. The dashboard defaults to a 09:50 UK local cutoff on the day before delivery, following published N2EX guidance. The brief did not name a specific auction or desk cutoff, so this is a working assumption and the time is editable. A forecast published by that cutoff may be selected. A forecast arriving later is excluded, even if it is visible in the archive today.
+### 0:38–1:04 · January decision window
 
-### Slide 3 · Live monthly dashboard
+**On screen:** January 1 decision detail; point to the January 2 delivery date, cutoff, newest included forecast, and publication timestamps.
 
-This is the running dashboard, using live Elexon records retrieved on the twenty-fifth of October 2026. The snapshot contains 744 paired hourly comparisons across all 31 January delivery days. Mean absolute error is 2,122.8 megawatts. Root mean square error is 2,616.7 megawatts, weighted absolute percentage error is 18.33 percent, and coverage is 100 percent. Historical source records can be revised, so the retrieval date is part of the result.
+**Narration:** Decisions from January 1 through January 31 map to delivery on the next calendar day. For the January 1 decision, the selected forecast was published at 09:30, before the 09:50 UK cutoff. The market was not specified, so the N2EX-based cutoff is editable.
 
-### Slide 4 · Daily accuracy and forecast vintage
+### 1:04–1:20 · Month-end boundary
 
-The daily chart helps find dates with higher error. Selecting a point opens the day-level detail. For the first of January, daily mean absolute error is 4,258.2 megawatts across 24 paired hours. The latest forecast publication represented for that day is 09:30 Zulu on December thirty-first, before the 09:50 UK cutoff. The interval table exposes each selected publication timestamp.
+**On screen:** January 31 decision detail showing February 1 delivery.
 
-### Slide 5 · Scope boundary
+**Narration:** The January 31 decision is checked against February 1 delivery. The day view carries the month boundary explicitly and uses only forecast vintages published by the cutoff.
 
-The product boundary is deliberate. A wind forecast is one input into a portfolio view. To calculate a purchase quantity, the team would also need demand, contracted generation, plant availability and portfolio position. Those inputs are outside the two scoped Elexon datasets. The app therefore supports the assessment without inventing a trade recommendation.
+### 1:20–1:41 · Scope
 
-## Part 2 · Technical review (2:36–5:08)
+**On screen:** Pilot boundary card comparing Elexon wind evidence with the additional data needed for a purchase quantity.
 
-### Slide 6 · Architecture
+**Narration:** The measured scope is Elexon's national wind forecast and actuals. Demand, contracts, plant availability, interconnector position, and portfolio exposure are not in these datasets, so Windwise does not invent a trade quantity.
 
-Part two, the technical review. The browser app is React and Vite. It calls a Python FastAPI service, which retrieves FUELHH and WINDFOR from Elexon’s public Insights API and caches responses in memory for ten minutes. Docker Compose starts the frontend and backend together. The API serves the selected data, metrics and interval-level forecast publication times.
+## Part 2 · Technical review (1:41–3:15)
 
-### Slide 7 · As-of forecast rule
+### 1:41–1:59 · Architecture
 
-For each forecast target hour, the backend filters records to those published at or before the previous-day cutoff and chooses the latest publication time among them. In this example, the 09:30 vintage is eligible, while the 10:15 vintage is too late. The decision time is calculated in the Europe London time zone and converted for timestamp comparison, so the implementation does not assume a permanent UTC offset.
+**On screen:** React/Vite → FastAPI → Elexon diagram and Docker Compose note.
 
-### Slide 8 · Resolution alignment
+**Narration:** React with Vite calls a Python FastAPI service. The service retrieves FUELHH and WINDFOR and caches responses for ten minutes. Docker Compose starts the frontend and backend together.
 
-The January WINDFOR target points are hourly. FUELHH actual wind values are half-hourly. The comparison uses the average of both half-hour actuals within each forecast hour. If either actual reading is absent, that hourly actual is missing and the interval is not scored. The app does not create synthetic half-hour forecasts or replace gaps with zero.
+### 1:59–2:18 · API date mapping
 
-### Slide 9 · Metrics and coverage
+**On screen:** `backend/app/main.py`, highlighting January validation and the `+1 day` delivery range.
 
-The service reports mean absolute error, root mean square error, weighted absolute percentage error, signed bias and coverage. Bias is forecast minus actual, so a positive value means the forecast was high on average. The displayed coverage is 744 paired values out of 744 expected hourly points for this snapshot. Each accuracy score uses only intervals that have both a forecast available at the cutoff and an actual.
+**Narration:** The API accepts only January decision dates, maps them to the next day's delivery dates, and fetches actuals and forecasts for that range. WINDFOR uses publication-time history with a seven-day lookback.
 
-### Slide 10 · Checks and extensions
+### 2:18–2:36 · As-of selection
 
-The unit checks cover the cutoff boundary, later vintages, WIND filtering, hourly actual averaging, missing values and interval counts. The main extension points are confirming the desk’s exact cutoff, adding demand and portfolio data, and persisting forecast snapshots for an operational audit trail. The README describes the data sources, assumptions, local setup, deployment configuration and AI assistance. That concludes the client walkthrough and technical handover.
+**On screen:** `backend/app/analysis.py`, highlighting the cutoff filter and latest eligible publication selection.
+
+**Narration:** For each delivery interval, the analysis calculates the cutoff in Europe/London, discards later publications, and selects the most recent eligible forecast. That prevents an archived later run from leaking into the decision snapshot.
+
+### 2:36–2:56 · Resolution and metrics
+
+**On screen:** `_aggregate` code and the matched-pair rules.
+
+**Narration:** WINDFOR is hourly; FUELHH is half-hourly. Windwise averages both actual readings for each forecast hour and leaves incomplete pairs missing. MAE, RMSE, WAPE, signed bias, and coverage use matched intervals only.
+
+### 2:56–3:15 · Checks and handover
+
+**On screen:** Unit-check list, repository map, and Docker start command.
+
+**Narration:** Unit checks cover the cutoff boundary, WIND filtering, hourly aggregation, missing values, and the January 31 to February 1 mapping. Run the pilot with Docker Compose. Hosting was skipped; the README documents setup and AI assistance.
