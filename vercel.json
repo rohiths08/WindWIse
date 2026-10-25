@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build",
+  "functions": {
+    "app.py": {
+      "maxDuration": 60
+    }
+  }
+}
