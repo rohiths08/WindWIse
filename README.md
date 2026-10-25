@@ -10,7 +10,7 @@ Windwise is a React and Python pilot for the UK utility team making day-ahead po
 - How did that forecast compare with the later Elexon wind outturn?
 - How complete is each comparison, and where were forecast errors larger?
 
-The dashboard opens with a selected decision snapshot, its next-day delivery, cutoff, latest eligible forecast publication, daily error, and paired-hour coverage. Use the date selector, previous/next controls, or the month chart to inspect another day. Export either the selected day or the full January interval set as CSV. Metric explanations and replay assumptions are available in expandable sections.
+The app is organized into four pages: **Home** gives the pilot overview and a starting decision; **Decisions** provides date navigation, the eligible forecast vintage, hourly comparison, and day/month CSV exports; **Accuracy** explains the monthly scores and daily error chart; and **Method** documents the data, cutoff, alignment, implementation, and scope limits. The selected decision and cutoff are shared across pages.
 
 The brief asks for **decisions made in January 2026**. Windwise therefore evaluates decision dates from **1–31 January 2026**, with each day’s forecast checked against the **next day’s delivery** (2 January–1 February). The decision date and delivery date are shown separately in the dashboard and API.
 
