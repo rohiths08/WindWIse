@@ -51,12 +51,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-size: 18px; font-weight: 700; letter-spacing: -.8px; }
 .brand-mark { width: 31px; height: 31px; display: grid; place-items: center; color: #7bd7b1; background: #1c4549; border: 1px solid #ffffff0e; border-radius: 10px; }
 .brand-dot { color: #76d4ad; }
-.topbar-nav { display: flex; align-items: center; gap: 26px; margin-left: auto; }
+.topbar-nav { display: flex; align-items: center; gap: 23px; margin-left: 38px; }
 .topbar-nav a { color: #a9bbbd; font-size: 11px; font-weight: 600; text-decoration: none; transition: color .15s ease; }
 .topbar-nav a:hover { color: #fff; }
 .topbar-nav a.active { position: relative; color: #f2f8f4; }
 .topbar-nav a.active::after { position: absolute; right: 0; bottom: -23px; left: 0; height: 2px; background: #72d6aa; content: ''; }
-.topbar-right { display: flex; align-items: center; gap: 13px; color: #bdcbca; font: 500 9px var(--mono); letter-spacing: .08em; white-space: nowrap; }
+.topbar-right { display: flex; align-items: center; gap: 13px; margin-left: auto; color: #bdcbca; font: 500 9px var(--mono); letter-spacing: .08em; white-space: nowrap; }
 .live-mark { display: flex; align-items: center; gap: 8px; }
 .live-mark i, .console-status i { width: 7px; height: 7px; background: #72d6aa; border-radius: 50%; box-shadow: 0 0 0 4px #72d6aa20; }
 .topbar-divider { width: 1px; height: 16px; background: #ffffff25; }
@@ -86,7 +86,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .console-main { display: flex; align-items: flex-end; justify-content: space-between; margin: 25px 0 17px; }
 .console-label { display: block; margin-bottom: 8px; color: #abc0bd; font: 500 9px var(--mono); letter-spacing: .1em; }
 .cutoff-control { display: flex; align-items: center; gap: 9px; color: #7bd7b1; }
-.cutoff-control input { width: 124px; padding: 0; color: #f3fbf6; background: transparent; border: 0; font: 600 35px var(--mono); letter-spacing: -.08em; outline: 0; }
+.cutoff-control input { width: 154px; min-width: 154px; padding: 0; color: #f3fbf6; background: transparent; border: 0; font: 600 32px var(--mono); letter-spacing: -.06em; font-variant-numeric: tabular-nums; outline: 0; }
 .cutoff-control input::-webkit-calendar-picker-indicator { opacity: .65; filter: invert(1); cursor: pointer; }
 .console-zone { padding-bottom: 4px; color: #a8bfbc; font: 500 9px/1.7 var(--mono); letter-spacing: .07em; text-align: right; }
 .console-divider { height: 1px; background: #ffffff18; }
@@ -310,7 +310,7 @@ tbody tr:hover { background: #f8faf7; }
   html { scroll-padding-top: 62px; }
   .topbar { height: 58px; gap: 12px; padding: 0 18px; }
   .brand { font-size: 16px; }
-  .topbar-nav { gap: 13px; }
+  .topbar-nav { gap: 13px; margin-left: 18px; }
   .topbar-nav a { font-size: 9px; }
   .topbar-right { gap: 8px; font-size: 8px; }
   .edition, .topbar-divider { display: none; }
@@ -393,7 +393,7 @@ tbody tr:hover { background: #f8faf7; }
 }
 @media (max-width: 420px) {
   .topbar { padding: 0 13px; }
-  .topbar-nav { gap: 9px; }
+  .topbar-nav { gap: 8px; margin-left: auto; }
   .topbar-nav a { font-size: 8px; }
   .topbar-right { display: none; }
   .content { width: calc(100% - 24px); }

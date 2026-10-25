@@ -237,7 +237,7 @@ function App() {
 
   const cutoffPanel = <div className="hero-console cutoff-console">
     <div className="console-top"><span className="console-status"><i/>{error ? 'Source data needs attention' : data ? 'Historical replay ready' : 'Loading Elexon data'}</span><span className="console-region">GB · ELEXON</span></div>
-    <div className="console-main"><div><span className="console-label">FORECAST CUT-OFF</span><div className="cutoff-control"><Icon name="clock" size={17}/><input id="cutoff" aria-label="Decision cutoff in UK local time" value={cutoff} onChange={event => setCutoff(event.target.value)} type="time"/></div></div><span className="console-zone">UK LOCAL TIME<br/>ON DECISION DATE</span></div>
+    <div className="console-main"><div><span className="console-label">FORECAST CUT-OFF</span><div className="cutoff-control"><input id="cutoff" aria-label="Decision cutoff in UK local time" value={cutoff} onChange={event => setCutoff(event.target.value)} type="time"/></div></div><span className="console-zone">UK LOCAL TIME<br/>ON DECISION DATE</span></div>
     <div className="console-divider"/><p>Only forecasts published at or before this time enter the replay.</p>
     <div className="console-footer"><span><b>09:50</b> default N2EX cutoff</span><span>Europe/London</span></div>
   </div>
