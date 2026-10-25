@@ -120,11 +120,23 @@ function PageIntro({ kicker, title, description, children }) {
 function App() {
   const [page, setPage] = useState(pageFromHash)
   const [cutoff, setCutoff] = useState('09:50')
+  const [cutoffInput, setCutoffInput] = useState('09:50')
+  const [cutoffInputError, setCutoffInputError] = useState('')
   const [selectedDate, setSelectedDate] = useState('2026-01-01')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+
+  function updateCutoffInput(value) {
+    setCutoffInput(value)
+    if (/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+      setCutoff(value)
+      setCutoffInputError('')
+    } else {
+      setCutoffInputError('Enter a valid 24-hour time in HH:MM format.')
+    }
+  }
 
   async function load({ refresh = false, signal } = {}) {
     setError('')
@@ -237,7 +249,7 @@ function App() {
 
   const cutoffPanel = <div className="hero-console cutoff-console">
     <div className="console-top"><span className="console-status"><i/>{error ? 'Source data needs attention' : data ? 'Historical replay ready' : 'Loading Elexon data'}</span><span className="console-region">GB · ELEXON</span></div>
-    <div className="console-main"><div><span className="console-label">FORECAST CUT-OFF</span><div className="cutoff-control"><input id="cutoff" aria-label="Decision cutoff in UK local time" value={cutoff} onChange={event => setCutoff(event.target.value)} type="time"/></div></div><span className="console-zone">UK LOCAL TIME<br/>ON DECISION DATE</span></div>
+    <div className="console-main"><div><label className="console-label" htmlFor="cutoff">FORECAST CUT-OFF</label><div className="cutoff-control"><input id="cutoff" aria-label="Decision cutoff in UK local time, 24-hour HH:MM" aria-invalid={Boolean(cutoffInputError)} aria-describedby={cutoffInputError ? 'cutoff-error' : undefined} inputMode="text" autoComplete="off" spellCheck="false" maxLength={5} placeholder="09:50" value={cutoffInput} onChange={event => updateCutoffInput(event.target.value)} type="text"/></div>{cutoffInputError && <span id="cutoff-error" className="cutoff-input-error" role="alert">{cutoffInputError}</span>}</div><span className="console-zone">UK LOCAL TIME<br/>ON DECISION DATE</span></div>
     <div className="console-divider"/><p>Only forecasts published at or before this time enter the replay.</p>
     <div className="console-footer"><span><b>09:50</b> default N2EX cutoff</span><span>Europe/London</span></div>
   </div>

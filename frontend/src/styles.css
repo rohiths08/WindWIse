@@ -86,8 +86,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .console-main { display: flex; align-items: flex-end; justify-content: space-between; margin: 25px 0 17px; }
 .console-label { display: block; margin-bottom: 8px; color: #abc0bd; font: 500 9px var(--mono); letter-spacing: .1em; }
 .cutoff-control { display: flex; align-items: center; gap: 9px; color: #7bd7b1; }
-.cutoff-control input { width: 154px; min-width: 154px; padding: 0; color: #f3fbf6; background: transparent; border: 0; font: 600 32px var(--mono); letter-spacing: -.06em; font-variant-numeric: tabular-nums; outline: 0; }
-.cutoff-control input::-webkit-calendar-picker-indicator { opacity: .65; filter: invert(1); cursor: pointer; }
+.cutoff-control input { width: 142px; min-width: 142px; padding: 0; color: #f3fbf6; background: transparent; border: 0; border-radius: 0; font: 600 32px/1.2 var(--mono); letter-spacing: -.06em; font-variant-numeric: tabular-nums; outline: 0; }
+.cutoff-control input::placeholder { color: #f3fbf688; }
+.cutoff-control input[aria-invalid="true"] { color: #ffc2a9; }
+.cutoff-input-error { display: block; max-width: 230px; margin-top: 5px; color: #ffc2a9; font-size: 10px; line-height: 1.4; }
 .console-zone { padding-bottom: 4px; color: #a8bfbc; font: 500 9px/1.7 var(--mono); letter-spacing: .07em; text-align: right; }
 .console-divider { height: 1px; background: #ffffff18; }
 .hero-console > p { margin: 13px 0 14px; color: #c2d2ce; font-size: 11px; line-height: 1.5; }
