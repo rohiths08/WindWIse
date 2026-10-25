@@ -10,6 +10,8 @@ Windwise is a React and Python pilot for the UK utility team making day-ahead po
 - How did that forecast compare with the later Elexon wind outturn?
 - How complete is each comparison, and where were forecast errors larger?
 
+The dashboard opens with a selected decision snapshot, its next-day delivery, cutoff, latest eligible forecast publication, daily error, and paired-hour coverage. Use the date selector, previous/next controls, or the month chart to inspect another day. Export either the selected day or the full January interval set as CSV. Metric explanations and replay assumptions are available in expandable sections.
+
 The brief asks for **decisions made in January 2026**. Windwise therefore evaluates decision dates from **1–31 January 2026**, with each day’s forecast checked against the **next day’s delivery** (2 January–1 February). The decision date and delivery date are shown separately in the dashboard and API.
 
 For each delivery hour, Windwise selects the WINDFOR record with the greatest `publishTime` at or before the configured decision cutoff. Records published after the cutoff are excluded, even if they are now visible in Elexon’s historical archive. The default cutoff is **09:50 Europe/London on the decision date**, based on Nord Pool’s published N2EX GB day-ahead auction guidance. The brief did not identify a specific auction or trading desk, so this is a documented, editable assumption rather than a universal UK market deadline.
@@ -104,8 +106,8 @@ backend/
   Dockerfile                   Python API container
   requirements.txt             Python dependencies
 frontend/
-  src/main.jsx                 React dashboard, charts, cutoff control, and interval table
-  src/styles.css               responsive dashboard styling
+  src/main.jsx                 decision snapshot, date navigation, CSV exports, charts, metrics, and interval audit
+  src/styles.css               responsive dashboard styling and keyboard focus states
   index.html                   browser entry page and metadata
   vite.config.js               development server and API proxy
   Dockerfile                   React/Vite container

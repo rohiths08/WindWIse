@@ -29,12 +29,14 @@ function Icon({ name, size = 18 }) {
   if (name === 'check') return <svg {...common}><path d="m5 12 4 4L19 6"/></svg>
   if (name === 'refresh') return <svg {...common}><path d="M20 7v5h-5"/><path d="M4.7 9A8 8 0 0 1 18.5 6L20 12M4 17v-5h5"/><path d="M19.3 15A8 8 0 0 1 5.5 18L4 12"/></svg>
   if (name === 'arrow') return <svg {...common}><path d="M7 17 17 7M7 7h10v10"/></svg>
+  if (name === 'download') return <svg {...common}><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+  if (name === 'calendar') return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
   return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 8v4m0 4h.01"/></svg>
 }
 
-function MetricCard({ label, value, suffix, note, icon, tone = '' }) {
+function MetricCard({ label, value, suffix, note, icon, tone = '', tooltip }) {
   return <article className={`metric-card ${tone}`}>
-    <div className="metric-top"><span>{label}</span><span className="metric-icon"><Icon name={icon} /></span></div>
+    <div className="metric-top"><span title={tooltip} aria-label={tooltip ? `${label}. ${tooltip}` : undefined}>{label}<span className="metric-help" aria-hidden="true">ⓘ</span></span><span className="metric-icon"><Icon name={icon} /></span></div>
     <div className="metric-value">{value}<small>{suffix}</small></div>
     <div className="metric-note">{note}</div>
   </article>
@@ -58,7 +60,7 @@ function DailyErrorChart({ days, selectedDate, onSelect }) {
     <svg className="daily-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily mean absolute forecast error in megawatts">
       {ticks.map((tick, i) => <g key={i}><line x1={pad.left} x2={width - pad.right} y1={yAt(tick)} y2={yAt(tick)} className="grid-line"/><text x={pad.left - 8} y={yAt(tick) + 4} textAnchor="end" className="axis-label">{Math.round(tick / 1000)}k</text></g>)}
       <path d={path} className="daily-line" />
-      {days.map((day, index) => day.maeMW === null ? null : <g key={day.decisionDate} className="chart-point" onClick={() => onSelect(day.decisionDate)} onKeyDown={event => event.key === 'Enter' && onSelect(day.decisionDate)} tabIndex="0" role="button" aria-label={`${dateLabel(day.decisionDate)}, MAE ${fmt(day.maeMW)} megawatts`}>
+      {days.map((day, index) => day.maeMW === null ? null : <g key={day.decisionDate} className="chart-point" onClick={() => onSelect(day.decisionDate)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(day.decisionDate) } }} tabIndex="0" role="button" aria-label={`${dateLabel(day.decisionDate)}, MAE ${fmt(day.maeMW)} megawatts`}>
         <circle cx={xAt(index)} cy={yAt(day.maeMW)} r={day.decisionDate === selectedDate ? 5.5 : 3.5} className={day.decisionDate === selectedDate ? 'point-selected' : 'point'}/>
         <title>{dateLabel(day.decisionDate, { day: 'numeric', month: 'long' })} decision → {dateLabel(day.deliveryDate, { day: 'numeric', month: 'long' })} delivery: {fmt(day.maeMW)} MW MAE · {day.matchedIntervals}/{day.expectedIntervals} intervals</title>
       </g>)}
@@ -103,13 +105,13 @@ function App() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
 
-  async function load({ refresh = false } = {}) {
+  async function load({ refresh = false, signal } = {}) {
     setError('')
     refresh ? setRefreshing(true) : setLoading(true)
     try {
       const query = new URLSearchParams({ start: monthStart, end: monthEnd, cutoff })
       if (refresh) query.set('refresh', 'true')
-      const response = await fetch(`/api/analysis?${query}`)
+      const response = await fetch(`/api/analysis?${query}`, { signal })
       const body = await response.json()
       if (!response.ok) throw new Error(body.detail || `Request failed (${response.status})`)
       setData(body)
@@ -118,76 +120,167 @@ function App() {
         if (firstWithData) setSelectedDate(firstWithData.decisionDate)
       }
     } catch (caught) {
-      setError(caught.message || 'Could not load Elexon data.')
+      if (caught.name !== 'AbortError') setError(caught.message || 'Could not load Elexon data.')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }
 
-  useEffect(() => { load() }, [cutoff])
+  useEffect(() => {
+    const controller = new AbortController()
+    load({ signal: controller.signal })
+    return () => controller.abort()
+  }, [cutoff])
 
   const selected = useMemo(() => data?.daily?.find(day => day.decisionDate === selectedDate), [data, selectedDate])
   const selectedRows = useMemo(() => data?.intervals?.filter(row => row.localStartTime?.slice(0, 10) === selected?.deliveryDate) || [], [data, selected])
   const datesWithData = data?.daily?.filter(day => day.matchedIntervals > 0).length || 0
   const recentPublish = selected?.latestForecastPublishTime
   const latestGenerated = data?.generatedAt ? new Date(data.generatedAt) : null
+  const selectedIndex = data?.daily?.findIndex(day => day.decisionDate === selectedDate) ?? -1
+  const vintageLeadMinutes = selected?.decisionCutoff && recentPublish
+    ? Math.max(0, Math.round((new Date(selected.decisionCutoff).getTime() - new Date(recentPublish).getTime()) / 60000))
+    : null
+
+  function moveDecision(offset) {
+    if (!data?.daily?.length) return
+    const next = Math.min(data.daily.length - 1, Math.max(0, selectedIndex + offset))
+    setSelectedDate(data.daily[next].decisionDate)
+  }
+
+  function downloadCsv(filename, rows, columns) {
+    if (!rows?.length) return
+    const escape = value => `"${String(value ?? '').replaceAll('"', '""')}"`
+    const csv = [columns.map(([, label]) => escape(label)).join(','), ...rows.map(row => columns.map(([key]) => escape(row[key])).join(','))].join('\r\n')
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  function exportSelectedDay() {
+    const rows = selectedRows.map(row => ({
+      decisionDate: selected?.decisionDate,
+      deliveryDate: selected?.deliveryDate,
+      startTime: row.localStartTime,
+      forecastMW: row.forecastMW,
+      actualMW: row.actualMW,
+      errorMW: row.errorMW,
+      forecastPublishTime: row.forecastPublishTime,
+    }))
+    downloadCsv(`windwise-${selected?.decisionDate || 'decision'}-intervals.csv`, rows, [
+      ['decisionDate', 'Decision date'], ['deliveryDate', 'Delivery date'], ['startTime', 'Period start (UK)'],
+      ['forecastMW', 'Forecast (MW)'], ['actualMW', 'Actual (MW)'], ['errorMW', 'Error (MW)'], ['forecastPublishTime', 'Forecast published (UTC)'],
+    ])
+  }
+
+  function exportMonth() {
+    const deliveryToDecision = new Map(data?.daily?.map(day => [day.deliveryDate, day.decisionDate]) || [])
+    const rows = (data?.intervals || []).map(row => ({
+      decisionDate: deliveryToDecision.get(row.localStartTime?.slice(0, 10)),
+      deliveryDate: row.localStartTime?.slice(0, 10),
+      startTime: row.localStartTime,
+      forecastMW: row.forecastMW,
+      actualMW: row.actualMW,
+      errorMW: row.errorMW,
+      forecastPublishTime: row.forecastPublishTime,
+    }))
+    downloadCsv('windwise-january-2026-decisions.csv', rows, [
+      ['decisionDate', 'Decision date'], ['deliveryDate', 'Delivery date'], ['startTime', 'Period start (UK)'],
+      ['forecastMW', 'Forecast (MW)'], ['actualMW', 'Actual (MW)'], ['errorMW', 'Error (MW)'], ['forecastPublishTime', 'Forecast published (UTC)'],
+    ])
+  }
 
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Windwise home"><span className="brand-mark"><Icon name="wind" size={21}/></span><span>windwise<span className="brand-dot">.</span></span></a>
-      <div className="topbar-right"><span className="live-mark"><i/>ELEXON BMRS DATA</span><span className="topbar-divider"/><span className="edition">PILOT MONITOR <b>·</b> GB</span></div>
+      <nav className="topbar-nav" aria-label="Page sections"><a href="#overview">Overview</a><a href="#decision-review">Decision review</a><a href="#method">Method</a></nav>
+      <div className="topbar-right"><span className="live-mark"><i/>ELEXON DATA</span><span className="topbar-divider"/><span className="edition">PILOT MONITOR <b>·</b> GB</span></div>
     </header>
 
     <main id="top" className="content">
       <section className="hero">
         <div className="hero-copy">
-          <div className="eyebrow"><span>FORECAST OPERATIONS</span><span className="eyebrow-rule"/><span>JANUARY 2026 DECISIONS</span></div>
-          <h1>Know what the wind<br/><em>will bring tomorrow.</em></h1>
-          <p>See the wind forecast available when the January buying decision was made, then compare it with the next day’s Elexon outturn.</p>
-          <div className="hero-meta"><span><Icon name="clock" size={15}/>Decision date at {cutoff} UK → next-day delivery</span><span className="meta-sep">/</span><span>{data ? `${data.comparisonResolutionMinutes}-minute comparison · actuals ${data.actualResolutionMinutes}-minute` : 'Hourly forecast with half-hour outturn'}</span></div>
+          <div className="eyebrow"><span>DAY-AHEAD WIND DESK</span><span className="eyebrow-rule"/><span>HISTORICAL REPLAY · JAN 2026</span></div>
+          <h1>Make the call with<br/><em>the forecast you had.</em></h1>
+          <p>Replay each January buying decision using only the latest Elexon wind forecast published by the chosen cutoff. Compare it with next-day outturn, hour by hour.</p>
+          <div className="hero-meta"><span><Icon name="check" size={15}/>31 decision dates</span><span className="meta-sep">·</span><span>National wind generation</span><span className="meta-sep">·</span><span>{data ? `${data.comparisonResolutionMinutes}-minute comparison` : 'Hourly forecast comparison'}</span></div>
         </div>
-        <div className="hero-aside">
-          <div className="wind-illustration" aria-hidden="true"><div className="sun-disc"/><div className="turbine turbine-one"><i/><b/><span/></div><div className="turbine turbine-two"><i/><b/><span/></div><div className="horizon"/><div className="wind-stroke stroke-one"/><div className="wind-stroke stroke-two"/></div>
-          <div className="cutoff-control"><label htmlFor="cutoff">DECISION CUTOFF <span>UK LOCAL TIME</span></label><div className="cutoff-input"><Icon name="clock" size={16}/><input id="cutoff" value={cutoff} onChange={event => setCutoff(event.target.value)} type="time"/><span>ON DECISION DATE</span></div><small>Defaults to the Nord Pool GB day-ahead auction gate closure.</small></div>
+        <div className="hero-console">
+          <div className="console-top"><span className="console-status"><i/>Historical replay ready</span><span className="console-region">GB · ELEXON</span></div>
+          <div className="console-main"><div><span className="console-label">FORECAST CUT-OFF</span><div className="cutoff-control"><Icon name="clock" size={17}/><input id="cutoff" aria-label="Decision cutoff in UK local time" value={cutoff} onChange={event => setCutoff(event.target.value)} type="time"/></div></div><span className="console-zone">UK LOCAL TIME<br/>ON DECISION DATE</span></div>
+          <div className="console-divider"/>
+          <p>Only forecasts published at or before this time are included in the replay.</p>
+          <div className="console-footer"><span><b>09:50</b> default N2EX cutoff</span><span>Europe/London</span></div>
         </div>
       </section>
 
-      <section className="section-heading overview-heading"><div><div className="section-kicker">MONTH AT A GLANCE · 1–31 JANUARY DECISION DATES</div><h2>Forecast performance for January buying decisions</h2></div><button className="refresh-button" onClick={() => load({ refresh: true })} disabled={refreshing || loading}><Icon name="refresh" size={15}/>{refreshing ? 'Refreshing…' : 'Refresh data'}</button></section>
+      {data && selected && <section className="decision-review" id="decision-review" aria-labelledby="decision-title">
+        <div className="decision-review-head">
+          <div><div className="section-kicker"><Icon name="calendar" size={14}/> INSPECT A BUYING DECISION</div><h2 id="decision-title">Decision snapshot</h2></div>
+          <div className="decision-actions">
+            <button className="quiet-button" onClick={exportSelectedDay} disabled={!selectedRows.length}><Icon name="download" size={15}/>Export day</button>
+            <button className="quiet-button" onClick={exportMonth} disabled={!data.intervals?.length}><Icon name="download" size={15}/>Export month</button>
+          </div>
+        </div>
+        <div className="decision-toolbar">
+          <div className="date-picker-group">
+            <label htmlFor="decision-date">DECISION DATE</label>
+            <div className="date-picker-controls">
+              <button className="step-button" onClick={() => moveDecision(-1)} disabled={selectedIndex <= 0} aria-label="Previous decision date">‹</button>
+              <select id="decision-date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)}>{data.daily.map(day => <option key={day.decisionDate} value={day.decisionDate}>{dateLabel(day.decisionDate, { weekday: 'short', day: 'numeric', month: 'long' })}</option>)}</select>
+              <button className="step-button" onClick={() => moveDecision(1)} disabled={selectedIndex >= data.daily.length - 1} aria-label="Next decision date">›</button>
+            </div>
+          </div>
+          <span className="decision-sequence"><span>{dateLabel(selected.decisionDate, { day: 'numeric', month: 'short' })}</span><b>→</b><span>{dateLabel(selected.deliveryDate, { day: 'numeric', month: 'short' })}</span><small>DECISION → DELIVERY</small></span>
+          <div className={`vintage-status ${recentPublish ? 'is-available' : 'is-missing'}`}>
+            <span className="vintage-indicator"><Icon name={recentPublish ? 'check' : 'info'} size={16}/></span>
+            <div><strong>{recentPublish ? 'Latest eligible forecast vintage' : 'No forecast before cutoff'}</strong><span>{recentPublish ? `Published ${timeLabel(recentPublish)} UK${vintageLeadMinutes !== null ? ` · ${vintageLeadMinutes} min before cutoff` : ''}` : 'No eligible WINDFOR vintage found'}</span></div>
+          </div>
+        </div>
+        <div className="decision-stats">
+          <div className="decision-stat"><span>DECISION CUTOFF</span><strong>{selected ? timeLabel(selected.decisionCutoff) : '—'} <small>UK time</small></strong></div>
+          <div className="decision-stat"><span>DAILY MAE</span><strong>{selected.maeMW == null ? '—' : <>{fmt(selected.maeMW)} <small>MW</small></>}</strong></div>
+          <div className="decision-stat"><span>PAIRED HOURS</span><strong>{selected.matchedIntervals}<small> / {selected.expectedIntervals}</small></strong></div>
+          <div className="decision-stat"><span>DELIVERY DATE</span><strong>{dateLabel(selected.deliveryDate, { day: 'numeric', month: 'short' })}</strong></div>
+        </div>
+      </section>}
 
-      {error && <section className="notice error-notice"><Icon name="info"/><div><strong>Elexon data could not be loaded</strong><p>{error}</p><button onClick={() => load({ refresh: true })}>Try again</button></div></section>}
-      {(loading && !data) && <section className="loading-panel"><span className="spinner"/><span>Loading January decision dates and next-day Elexon outturn…</span></section>}
+      <section className="section-heading overview-heading" id="overview"><div><div className="section-kicker">MONTH AT A GLANCE · 1–31 JANUARY DECISION DATES</div><h2>How the forecast performed</h2></div><button className="refresh-button" onClick={() => load({ refresh: true })} disabled={refreshing || loading}><Icon name="refresh" size={15}/>{refreshing ? 'Refreshing Elexon…' : 'Refresh data'}</button></section>
+
+      {error && <section className="notice error-notice" role="alert"><Icon name="info"/><div><strong>Elexon data could not be loaded</strong><p>{error}</p><button onClick={() => load({ refresh: true })}>Try again</button></div></section>}
+      {(loading && !data) && <section className="loading-panel" role="status" aria-live="polite"><span className="spinner"/><span>Loading January decision dates and next-day Elexon outturn…</span></section>}
 
       {data && <>
         <section className="metrics-grid" aria-label="Monthly forecast accuracy metrics">
-          <MetricCard label="Mean absolute error" value={fmt(data.metrics.maeMW)} suffix=" MW" note={`Typical absolute miss per ${data.comparisonResolutionMinutes === 60 ? 'forecast hour' : 'half-hour'}`} icon="wind" tone="metric-accent"/>
-          <MetricCard label="Root mean square error" value={fmt(data.metrics.rmseMW)} suffix=" MW" note="Weights larger misses more heavily" icon="arrow"/>
-          <MetricCard label="WAPE" value={data.metrics.wapePercent == null ? '—' : fmt(data.metrics.wapePercent, 1)} suffix="%" note="Weighted absolute miss ÷ actual total" icon="check"/>
-          <MetricCard label="Forecast bias" value={data.metrics.biasMW == null ? '—' : `${data.metrics.biasMW > 0 ? '+' : ''}${fmt(data.metrics.biasMW)}`} suffix=" MW" note={data.metrics.biasMW == null ? 'No matched data' : data.metrics.biasMW > 0 ? 'Forecast ran high on average' : data.metrics.biasMW < 0 ? 'Forecast ran low on average' : 'No directional bias'} icon="arrow"/>
-          <MetricCard label="Paired interval coverage" value={fmt(data.metrics.coveragePercent, 1)} suffix="%" note={`${nf.format(data.metrics.matchedIntervals)} of ${nf.format(data.metrics.expectedIntervals)} intervals matched`} icon="clock" tone="metric-dark"/>
+          <MetricCard label="Mean absolute error" value={fmt(data.metrics.maeMW)} suffix=" MW" note={`Typical absolute miss per ${data.comparisonResolutionMinutes === 60 ? 'forecast hour' : 'half-hour'}`} icon="wind" tone="metric-accent" tooltip="The average absolute difference between forecast and actual generation. Lower is better."/>
+          <MetricCard label="Root mean square error" value={fmt(data.metrics.rmseMW)} suffix=" MW" note="Larger misses count more" icon="arrow" tooltip="The square root of mean squared error. It gives more weight to large forecast misses."/>
+          <MetricCard label="WAPE" value={data.metrics.wapePercent == null ? '—' : fmt(data.metrics.wapePercent, 1)} suffix="%" note="Absolute error ÷ actual total" icon="check" tooltip="Weighted absolute percentage error: total absolute error divided by total actual wind generation."/>
+          <MetricCard label="Forecast bias" value={data.metrics.biasMW == null ? '—' : `${data.metrics.biasMW > 0 ? '+' : ''}${fmt(data.metrics.biasMW)}`} suffix=" MW" note={data.metrics.biasMW == null ? 'No matched data' : data.metrics.biasMW > 0 ? 'Forecast ran high on average' : data.metrics.biasMW < 0 ? 'Forecast ran low on average' : 'No directional bias'} icon="arrow" tooltip="Mean forecast minus actual. Positive means forecasts were higher than outturn."/>
+          <MetricCard label="Paired interval coverage" value={fmt(data.metrics.coveragePercent, 1)} suffix="%" note={`${nf.format(data.metrics.matchedIntervals)} of ${nf.format(data.metrics.expectedIntervals)} hours matched`} icon="clock" tone="metric-dark" tooltip="The share of expected hourly intervals with both a forecast and a valid paired actual."/>
         </section>
+
+        <details className="metric-guide"><summary>How to read these scores</summary><div className="metric-guide-grid"><p><strong>MAE</strong> shows the typical size of the miss in MW.</p><p><strong>RMSE</strong> highlights days with larger misses.</p><p><strong>WAPE</strong> scales absolute error against total actual wind.</p><p><strong>Bias</strong> shows whether the forecast tended high or low.</p><p><strong>Coverage</strong> tells you how much of the expected period is scored.</p></div></details>
 
         <section className="panel performance-panel">
-          <div className="panel-head"><div><div className="section-kicker">DAY-BY-DAY · {datesWithData} OF 31 DECISIONS WITH MATCHED DATA</div><h3>Forecast error by decision date</h3></div><div className="chart-legend"><span><i className="legend-error"/>Daily MAE</span><span className="legend-unit">MW</span></div></div>
+          <div className="panel-head"><div><div className="section-kicker">DAY-BY-DAY · {datesWithData} OF 31 DECISIONS WITH MATCHED DATA</div><h3>Find the harder days</h3><p className="panel-subtitle">Choose a point to open that decision’s next-day forecast and outturn.</p></div><div className="chart-head-actions"><div className="chart-legend"><span><i className="legend-error"/>Daily MAE</span><span className="legend-unit">MW</span></div><button className="text-button" onClick={exportMonth} disabled={!data.intervals?.length}><Icon name="download" size={14}/>Download data</button></div></div>
           <DailyErrorChart days={data.daily} selectedDate={selectedDate} onSelect={setSelectedDate}/>
-          <div className="chart-foot"><span>Click a point to inspect that decision and its next-day delivery</span><span>Mean absolute error · lower is better</span></div>
+          <div className="chart-foot"><span>Daily MAE across next-day delivery intervals</span><span>Lower is better · selected date is highlighted</span></div>
         </section>
 
-        <section className="panel day-panel">
-          <div className="panel-head day-head"><div><div className="section-kicker">DECISION DATE → DELIVERY DATE</div><h3>{selected ? `${dateLabel(selected.decisionDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} decision · delivery ${dateLabel(selected.deliveryDate, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Select a day'}</h3></div><div className="day-controls"><label htmlFor="delivery-date">DECISION DATE</label><select id="delivery-date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)}>{data.daily.map(day => <option key={day.decisionDate} value={day.decisionDate}>{dateLabel(day.decisionDate, { day: 'numeric', month: 'long' })}</option>)}</select></div></div>
-          <div className="day-summary">
-            <div className="day-stat"><span>AS-OF CUTOFF</span><strong>{selected ? timeLabel(selected.decisionCutoff) : '—'} <small>decision date</small></strong></div>
-            <div className="day-stat"><span>NEWEST INCLUDED FORECAST</span><strong>{recentPublish ? `${timeLabel(recentPublish)} UK` : 'No vintage available'} <small>{recentPublish ? dateLabel(recentPublish.slice(0, 10)) : ''}</small></strong></div>
-            <div className="day-stat"><span>DAY MAE</span><strong>{selected?.maeMW == null ? '—' : `${fmt(selected.maeMW)} MW`}</strong></div>
-            <div className="day-stat"><span>PERIOD COVERAGE</span><strong>{selected ? `${selected.matchedIntervals}/${selected.expectedIntervals}` : '—'} <small>paired</small></strong></div>
-          </div>
-          <div className="detail-legend"><span><i className="legend-actual"/>Actual outturn</span><span><i className="legend-forecast"/>Forecast at cutoff</span><span className="legend-explainer">MW · UK time</span></div>
+        <section className="panel day-panel" aria-labelledby="hourly-title">
+          <div className="panel-head day-head"><div><div className="section-kicker">HOURLY DELIVERY PROFILE</div><h3 id="hourly-title">Forecast versus actual</h3><p className="panel-subtitle">{selected ? `${dateLabel(selected.deliveryDate, { weekday: 'long', day: 'numeric', month: 'long' })} delivery · all times UK` : 'Select a decision date'}</p></div><div className="detail-legend"><span><i className="legend-actual"/>Actual outturn</span><span><i className="legend-forecast"/>Forecast at cutoff</span></div></div>
           <ComparisonChart rows={selectedRows}/>
-          <div className="table-head"><div><div className="section-kicker">{data.comparisonResolutionMinutes === 60 ? 'HOURLY DETAIL' : 'HALF-HOURLY DETAIL'}</div><h4>Forecast beside actual</h4></div><span>{selectedRows.length} forecast periods</span></div>
-          <div className="table-scroll"><table><thead><tr><th>PERIOD START</th><th>FORECAST MW</th><th>ACTUAL MW</th><th>ERROR MW</th><th>FORECAST PUBLISHED</th></tr></thead><tbody>{selectedRows.map(row => <tr key={row.startTime}><td className="time-cell">{timeLabel(row.startTime)}</td><td>{fmt(row.forecastMW, 0)}</td><td>{fmt(row.actualMW, 0)}</td><td className={row.errorMW == null ? '' : row.errorMW > 0 ? 'error-positive' : 'error-negative'}>{row.errorMW == null ? '—' : `${row.errorMW > 0 ? '+' : ''}${fmt(row.errorMW, 0)}`}</td><td>{row.forecastPublishTime ? `${dateLabel(row.forecastPublishTime.slice(0, 10))} · ${timeLabel(row.forecastPublishTime)}` : 'No forecast before cutoff'}</td></tr>)}</tbody></table></div>
+          <div className="table-head"><div><div className="section-kicker">{data.comparisonResolutionMinutes === 60 ? 'HOURLY DETAIL' : 'HALF-HOURLY DETAIL'}</div><h4>Interval-by-interval audit</h4><p className="panel-subtitle">Positive error means forecast generation was higher than actual outturn.</p></div><span>{selectedRows.length} hourly intervals</span></div>
+          <div className="table-scroll" role="region" aria-label="Forecast and actual interval data" tabIndex="0"><table><thead><tr><th>PERIOD START</th><th>FORECAST MW</th><th>ACTUAL MW</th><th>ERROR MW</th><th>FORECAST PUBLISHED</th></tr></thead><tbody>{selectedRows.map(row => <tr key={row.startTime}><td className="time-cell">{timeLabel(row.startTime)}</td><td>{fmt(row.forecastMW, 0)}</td><td>{fmt(row.actualMW, 0)}</td><td className={row.errorMW == null ? '' : row.errorMW > 0 ? 'error-positive' : 'error-negative'}>{row.errorMW == null ? '—' : `${row.errorMW > 0 ? '+' : ''}${fmt(row.errorMW, 0)}`}</td><td>{row.forecastPublishTime ? `${dateLabel(row.forecastPublishTime.slice(0, 10))} · ${timeLabel(row.forecastPublishTime)}` : 'No forecast before cutoff'}</td></tr>)}</tbody></table></div>
         </section>
 
-        <section className="method-strip"><div className="method-icon"><Icon name="check" size={19}/></div><div><strong>January decisions use the latest forecast published by the selected cutoff.</strong><p>For each next-day delivery hour, Windwise selects the record with the latest Elexon <code>publishTime</code> at or before the decision date cutoff. January WINDFOR points are hourly, so paired FUELHH half-hours are averaged to an hourly actual; no half-hour forecasts are synthesized. Forecasts published after the cutoff are excluded. A net procurement quantity would also require demand and portfolio data, outside this Elexon-only scope.</p></div><a href="https://developer.data.elexon.co.uk/" target="_blank" rel="noreferrer">Elexon source <Icon name="arrow" size={14}/></a></section>
+        <details className="method-details" id="method"><summary><span><span className="section-kicker">METHOD & SCOPE</span><strong>How this replay is built</strong></span><span className="method-summary-side">Elexon only · Read assumptions</span></summary><div className="method-body"><div><h4>Forecast vintage selection</h4><p>For each next-day delivery hour, Windwise selects the WINDFOR record with the latest <code>publishTime</code> at or before the decision-date cutoff. Later publications are excluded from the replay.</p></div><div><h4>Comparable intervals</h4><p>WINDFOR is hourly and FUELHH actuals are half-hourly. The two half-hour actual readings are averaged for each forecast hour. Incomplete pairs are missing, not zero.</p></div><div><h4>Scope boundary</h4><p>This pilot measures national wind forecast performance. It does not calculate a purchase quantity because demand, contracts, plant availability, interconnector position, and portfolio exposure are outside the allowed datasets.</p></div><a href="https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/WINDFOR/stream" target="_blank" rel="noreferrer">Elexon WINDFOR docs <Icon name="arrow" size={14}/></a></div></details>
         <div className="data-footnote"><span>Data: Elexon Insights · FUELHH (WIND) and WINDFOR · Jan decisions → 2 Jan–1 Feb delivery</span><span>{latestGenerated ? `Retrieved ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(latestGenerated)} UTC` : 'January 2026 decisions'}</span></div>
       </>}
     </main>
